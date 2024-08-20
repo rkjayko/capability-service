@@ -1,4 +1,4 @@
-package com.example.capability_service.dto;
+package com.example.capability_service.domain.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

@@ -1,5 +1,6 @@
-package com.example.capability_service.dto;
+package com.example.capability_service.domain.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -10,6 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TechnologyDTO {
+    @JsonIgnore
     private Long id;
 
     @NotBlank(message = "El nombre de la tecnología no puede estar vacío")

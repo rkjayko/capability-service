@@ -1,4 +1,4 @@
-package com.example.capability_service.configuration;
+package com.example.capability_service.infrastructure.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
