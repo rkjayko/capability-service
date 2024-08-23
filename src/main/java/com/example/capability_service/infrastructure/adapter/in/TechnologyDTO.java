@@ -1,4 +1,4 @@
-package com.example.capability_service.domain.dto;
+package com.example.capability_service.infrastructure.adapter.in;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.NotBlank;

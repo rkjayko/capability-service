@@ -2,24 +2,23 @@ package com.example.capability_service;
 
 import com.example.capability_service.application.mapper.CapabilityMapper;
 import com.example.capability_service.application.mapper.TechnologyMapper;
-import com.example.capability_service.domain.dto.CapabilityQueryParamsDTO;
 import com.example.capability_service.domain.dto.CapabilityRequestDTO;
 import com.example.capability_service.domain.dto.CapabilityResponseDTO;
-import com.example.capability_service.domain.dto.TechnologyDTO;
+import com.example.capability_service.infrastructure.adapter.in.TechnologyDTO;
 import com.example.capability_service.domain.entity.Capability;
-import com.example.capability_service.infrastructure.adapter.CapabilityRepository;
-import com.example.capability_service.domain.useCase.CapabilityServiceImpl;
-import com.example.capability_service.infrastructure.adapter.out.TechnologyServiceAdapter;
-import com.example.capability_service.infrastructure.config.CustomException;
+import com.example.capability_service.domain.port.CapabilityBootcampRepository;
+import com.example.capability_service.domain.port.CapabilityRepository;
+import com.example.capability_service.application.service.CapabilityServiceImpl;
+import com.example.capability_service.infrastructure.adapter.in.TechnologyServiceAdapter;
+import com.example.capability_service.domain.exception.CapabilityException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
-import org.springframework.data.r2dbc.core.ReactiveSelectOperation;
-import org.springframework.data.relational.core.query.Query;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -30,8 +29,7 @@ import java.util.stream.LongStream;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class CapabilityServiceTest {
@@ -79,12 +77,15 @@ class CapabilityServiceTest {
     @Mock
     private TechnologyServiceAdapter technologyServiceAdapter;
 
+    @Mock
+    private CapabilityBootcampRepository capabilityBootcampRepository;
+
     @InjectMocks
     private CapabilityServiceImpl service;
 
     @BeforeEach
     void setup() {
-        service = new CapabilityServiceImpl(repository, technologyServiceAdapter, template, capabilityMapper, technologyMapper);
+        service = new CapabilityServiceImpl(repository, technologyServiceAdapter, template, capabilityMapper, technologyMapper, capabilityBootcampRepository);
     }
 
     @Test
@@ -102,7 +103,10 @@ class CapabilityServiceTest {
         responseDTO.setName(CAPABILITY_NAME);
         responseDTO.setDescription(CAPABILITY_DESCRIPTION);
 
+        when(repository.findByName(CAPABILITY_NAME)).thenReturn(Mono.empty());
+
         when(capabilityMapper.mapToEntity(any(CapabilityRequestDTO.class))).thenReturn(Mono.just(savedCapability));
+
         when(repository.save(any(Capability.class))).thenReturn(Mono.just(savedCapability));
         when(capabilityMapper.mapToDTO(any(Capability.class))).thenReturn(Mono.just(responseDTO));
 
@@ -116,30 +120,23 @@ class CapabilityServiceTest {
         when(technologyServiceAdapter.saveCapabilityTechnologies(any(Long.class), anyList()))
                 .thenReturn(Mono.empty());
 
-        Mono<CapabilityResponseDTO> result = service.createCapability(requestDTO);
+        Mono<Void> result = service.createCapability(requestDTO);
 
         StepVerifier.create(result)
-                .expectNextMatches(response -> response.getId().equals(CAPABILITY_ID_1) &&
-                        response.getName().equals(CAPABILITY_NAME) &&
-                        response.getDescription().equals(CAPABILITY_DESCRIPTION))
                 .verifyComplete();
-    }
 
+    }
 
     @Test
     void createCapabilityFailsWhenLessThanThreeTechnologies() {
         CapabilityRequestDTO requestDTO = new CapabilityRequestDTO(null, CAPABILITY_NAME, CAPABILITY_DESCRIPTION, Collections.singletonList(1L));
 
-        TechnologyServiceAdapter technologyServiceAdapter = mock(TechnologyServiceAdapter.class);
-        when(technologyServiceAdapter.getTechnologiesByIds(anyList()))
-                .thenReturn(Flux.empty());
+        when(repository.findByName(CAPABILITY_NAME)).thenReturn(Mono.empty());
 
-        CapabilityServiceImpl service = new CapabilityServiceImpl(repository, technologyServiceAdapter, template, capabilityMapper, technologyMapper);
-
-        Mono<CapabilityResponseDTO> result = service.createCapability(requestDTO);
+        Mono<Void> result = service.createCapability(requestDTO);
 
         StepVerifier.create(result)
-                .expectErrorMatches(throwable -> throwable instanceof CustomException.CapabilityValidationException &&
+                .expectErrorMatches(throwable -> throwable instanceof CapabilityException.CapabilityValidationException &&
                         throwable.getMessage().equals(ERROR_MIN_TECHNOLOGIES))
                 .verify();
     }
@@ -149,43 +146,40 @@ class CapabilityServiceTest {
         List<Long> technologyIds = Arrays.asList(TECHNOLOGY_ID_1, TECHNOLOGY_ID_1, TECHNOLOGY_ID_2);
         CapabilityRequestDTO requestDTO = new CapabilityRequestDTO(null, CAPABILITY_NAME, CAPABILITY_DESCRIPTION, technologyIds);
 
-        when(technologyServiceAdapter.getTechnologiesByIds(anyList())).thenReturn(Flux.fromIterable(technologyIds)
-                .flatMap(id -> Mono.just(new TechnologyDTO(id, TECHNOLOGY_NAME, TECHNOLOGY_DESCRIPTION))));
+        when(repository.findByName(CAPABILITY_NAME)).thenReturn(Mono.empty());
 
-        Mono<CapabilityResponseDTO> result = service.createCapability(requestDTO);
+        Mono<Void> result = service.createCapability(requestDTO);
 
         StepVerifier.create(result)
-                .expectErrorMatches(throwable -> throwable instanceof CustomException.CapabilityValidationException &&
+                .expectErrorMatches(throwable -> throwable instanceof CapabilityException.CapabilityValidationException &&
                         throwable.getMessage().equals(ERROR_DUPLICATE_TECHNOLOGIES))
                 .verify();
     }
+
 
     @Test
     void createCapabilityFailsWhenMoreThanTwentyTechnologies() {
         List<Long> technologyIds = LongStream.rangeClosed(1, 21).boxed().collect(Collectors.toList());
         CapabilityRequestDTO requestDTO = new CapabilityRequestDTO(null, CAPABILITY_NAME, CAPABILITY_DESCRIPTION, technologyIds);
+        when(repository.findByName(CAPABILITY_NAME)).thenReturn(Mono.empty());
 
-        when(technologyServiceAdapter.getTechnologiesByIds(anyList()))
-                .thenReturn(Flux.fromIterable(technologyIds)
-                        .flatMap(id -> Mono.just(new TechnologyDTO(id, TECHNOLOGY_NAME, TECHNOLOGY_DESCRIPTION))));
-
-        Mono<CapabilityResponseDTO> result = service.createCapability(requestDTO);
+        Mono<Void> result = service.createCapability(requestDTO);
 
         StepVerifier.create(result)
-                .expectErrorMatches(throwable -> throwable instanceof CustomException.CapabilityValidationException &&
+                .expectErrorMatches(throwable -> throwable instanceof CapabilityException.CapabilityValidationException &&
                         throwable.getMessage().equals(ERROR_MAX_TECHNOLOGIES))
                 .verify();
     }
 
     @Test
-    void getAllCapabilitiesSuccessful() {
+    void getAllCapabilitiesSuccess() {
         Capability capability1 = new Capability();
-        capability1.setId(1L);
-        capability1.setName("Capability 1");
-        capability1.setDescription("Description 1");
+        capability1.setId(CAPABILITY_ID_1);
+        capability1.setName(CAPABILITY_NAME);
+        capability1.setDescription(CAPABILITY_DESCRIPTION);
 
         Capability capability2 = new Capability();
-        capability2.setId(2L);
+        capability2.setId(CAPABILITY_ID_2);
         capability2.setName("Capability 2");
         capability2.setDescription("Description 2");
 
@@ -194,29 +188,21 @@ class CapabilityServiceTest {
         TechnologyDTO tech1 = new TechnologyDTO(1L, TECHNOLOGY_NAME, TECHNOLOGY_DESCRIPTION);
         TechnologyDTO tech2 = new TechnologyDTO(2L, "Tech2", "Desc2");
 
-        CapabilityResponseDTO dto1 = new CapabilityResponseDTO( CAPABILITY_ID_1, CAPABILITY_NAME,CAPABILITY_DESCRIPTION, Arrays.asList(tech1, tech2));
-        CapabilityResponseDTO dto2 = new CapabilityResponseDTO( CAPABILITY_ID_2, "Capability 2","Description 2", Arrays.asList(tech1, tech2));
+        CapabilityResponseDTO dto1 = new CapabilityResponseDTO(CAPABILITY_ID_1, CAPABILITY_NAME, CAPABILITY_DESCRIPTION, Arrays.asList(tech1, tech2));
+        CapabilityResponseDTO dto2 = new CapabilityResponseDTO(CAPABILITY_ID_2, "Capability 2", "Description 2", Arrays.asList(tech1, tech2));
 
-        ReactiveSelectOperation.ReactiveSelect<Capability> selectOperation = mock(ReactiveSelectOperation.ReactiveSelect.class);
-        when(template.select(Capability.class)).thenReturn(selectOperation);
-        when(selectOperation.matching(any(Query.class))).thenReturn(selectOperation);
-        when(selectOperation.all()).thenReturn(Flux.fromIterable(capabilities));
+        when(repository.findAllBy(any(Pageable.class))).thenReturn(Flux.fromIterable(capabilities));
 
         when(technologyServiceAdapter.getTechnologiesByCapability(any(Long.class)))
                 .thenReturn(Flux.just(tech1, tech2));
 
-        Map<Long, CapabilityResponseDTO> capabilityToDTOMap = new HashMap<>();
-        capabilityToDTOMap.put(1L, dto1);
-        capabilityToDTOMap.put(2L, dto2);
-
         when(technologyMapper.mapToDTOTechnologies(any(Capability.class), anyList()))
                 .thenAnswer(invocation -> {
                     Capability capability = invocation.getArgument(0);
-                    return capabilityToDTOMap.getOrDefault(capability.getId(), null);
+                    return capability.getId().equals(1L) ? dto1 : dto2;
                 });
 
-        CapabilityQueryParamsDTO queryParams = new CapabilityQueryParamsDTO(0,10,"name",true);
-        Flux<CapabilityResponseDTO> result = service.getAllCapabilities(queryParams);
+        Flux<CapabilityResponseDTO> result = service.getAllCapabilities("asc", 0, 10);
 
         StepVerifier.create(result)
                 .expectNext(dto1, dto2)
@@ -225,19 +211,18 @@ class CapabilityServiceTest {
 
     @Test
     void getAllCapabilitiesEmptyResult() {
-        ReactiveSelectOperation.ReactiveSelect<Capability> selectMock = mock(ReactiveSelectOperation.ReactiveSelect.class);
+        when(repository.findAllBy(any(Pageable.class))).thenReturn(Flux.empty());
 
-        when(template.select(Capability.class)).thenReturn(selectMock);
-        when(selectMock.matching(any(Query.class))).thenReturn(selectMock);
-        when(selectMock.all()).thenReturn(Flux.empty());
+        CapabilityServiceImpl service = new CapabilityServiceImpl(repository, technologyServiceAdapter, template, capabilityMapper, technologyMapper, capabilityBootcampRepository);
 
-        CapabilityQueryParamsDTO queryParams = new CapabilityQueryParamsDTO(0, 10, "name", true);
-
-        Flux<CapabilityResponseDTO> result = service.getAllCapabilities(queryParams);
+        Flux<CapabilityResponseDTO> result = service.getAllCapabilities("asc", 0, 10);
 
         StepVerifier.create(result)
                 .expectNextCount(0)
                 .verifyComplete();
+
+        verify(repository).findAllBy(any(Pageable.class));
+        verify(technologyServiceAdapter, never()).getTechnologiesByCapability(anyLong());
     }
 
     @Test
@@ -247,20 +232,19 @@ class CapabilityServiceTest {
         capability.setName(CAPABILITY_NAME);
         capability.setDescription(CAPABILITY_DESCRIPTION);
 
-        ReactiveSelectOperation.ReactiveSelect<Capability> selectMock = mock(ReactiveSelectOperation.ReactiveSelect.class);
-        when(template.select(Capability.class)).thenReturn(selectMock);
-        when(selectMock.matching(any(Query.class))).thenReturn(selectMock);
-        when(selectMock.all()).thenReturn(Flux.just(capability));
+        when(repository.findAllBy(any(Pageable.class))).thenReturn(Flux.just(capability));
 
         when(technologyServiceAdapter.getTechnologiesByCapability(any(Long.class)))
                 .thenReturn(Flux.error(new RuntimeException("Technology service error")));
 
-        CapabilityQueryParamsDTO queryParams = new CapabilityQueryParamsDTO(0, 10, "name", true);
-        Flux<CapabilityResponseDTO> result = service.getAllCapabilities(queryParams);
+        Flux<CapabilityResponseDTO> result = service.getAllCapabilities("asc", 0, 10);
 
         StepVerifier.create(result)
                 .expectErrorMatches(throwable -> throwable instanceof RuntimeException &&
                         throwable.getMessage().equals("Technology service error"))
                 .verify();
+
+        verify(repository).findAllBy(any(Pageable.class));
+        verify(technologyServiceAdapter).getTechnologiesByCapability(CAPABILITY_ID_1);
     }
 }

@@ -1,7 +1,7 @@
 package com.example.capability_service.application.mapper;
 
 import com.example.capability_service.domain.dto.CapabilityResponseDTO;
-import com.example.capability_service.domain.dto.TechnologyDTO;
+import com.example.capability_service.infrastructure.adapter.in.TechnologyDTO;
 import com.example.capability_service.domain.entity.Capability;
 import org.springframework.stereotype.Component;
 

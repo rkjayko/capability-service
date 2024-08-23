@@ -1,6 +1,6 @@
-package com.example.capability_service.infrastructure.config;
+package com.example.capability_service.domain.exception;
 
-public class CustomException {
+public class CapabilityException {
 
     public static class CapabilityValidationException extends RuntimeException {
         public CapabilityValidationException(String message) {

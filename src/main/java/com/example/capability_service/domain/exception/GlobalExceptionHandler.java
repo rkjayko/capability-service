@@ -1,6 +1,6 @@
-package com.example.capability_service.infrastructure.config;
+package com.example.capability_service.domain.exception;
 
-import com.example.capability_service.domain.ErrorResponseDTO;
+import com.example.capability_service.infrastructure.adapter.out.ErrorResponseDTO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -11,9 +11,9 @@ import reactor.core.publisher.Mono;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(CustomException.CapabilityValidationException.class)
+    @ExceptionHandler(CapabilityException.CapabilityValidationException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    public Mono<ResponseEntity<ErrorResponseDTO>> handleTechnologyNotFound(CustomException.CapabilityValidationException ex) {
+    public Mono<ResponseEntity<ErrorResponseDTO>> handleTechnologyNotFound(CapabilityException.CapabilityValidationException ex) {
         ErrorResponseDTO errorResponse = new ErrorResponseDTO(
                 ex.getMessage());
         return Mono.just(new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT));
